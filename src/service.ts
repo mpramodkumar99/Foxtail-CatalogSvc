@@ -4,8 +4,8 @@ import type { CreateProductInput, UpdateProductInput } from './types.js';
 export class ProductService {
   constructor(private repo: ProductRepository) {}
 
-  listProducts(category?: string) {
-    return this.repo.findAll(category);
+  listProducts(filters?: { category?: string; subCategory?: string; shipsTo?: string }) {
+    return this.repo.findAll(filters);
   }
 
   getProduct(id: string) {
