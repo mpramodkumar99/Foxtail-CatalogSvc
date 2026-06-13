@@ -9,6 +9,7 @@ export class ProductService {
     subCategory?: string;
     shipsTo?: string;
     sellerId?: string;
+    status?: string;
   }) {
     return this.repo.findAll(filters);
   }

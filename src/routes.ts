@@ -4,15 +4,16 @@ import { createProductSchema, updateProductSchema } from './schemas.js';
 
 export function registerProductRoutes(app: FastifyInstance, service: ProductService) {
 
-  // ── LIST ── GET /v1/products?category=&subCategory=&shipsTo=&sellerId=
+  // ── LIST ── GET /v1/products?category=&subCategory=&shipsTo=&sellerId=&status=
   app.get('/v1/products', async (request, reply) => {
-    const { category, subCategory, shipsTo, sellerId } = request.query as {
+    const { category, subCategory, shipsTo, sellerId, status } = request.query as {
       category?: string;
       subCategory?: string;
       shipsTo?: string;
       sellerId?: string;
+      status?: string;
     };
-    const products = await service.listProducts({ category, subCategory, shipsTo, sellerId });
+    const products = await service.listProducts({ category, subCategory, shipsTo, sellerId, status });
     return reply.send({ success: true, data: products, meta: { total: products.length } });
   });
 

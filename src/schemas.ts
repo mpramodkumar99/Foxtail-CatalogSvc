@@ -10,8 +10,11 @@ const subCategories = [
   'utilities', 'beauty_wellness', 'technical', 'construction_finishing', 'mechanical', 'rentals',
 ] as const;
 
+const productStatuses = ['draft', 'active', 'archived'] as const;
+
 // Fields a seller provides when creating a product.
-// isVerified is NOT here — the server defaults it to false; only admins can flip it.
+// isVerified is NOT here — server defaults to false; admin-only.
+// inStock is NOT here — server derives it from stockQuantity.
 export const createProductSchema = z.object({
   name:          z.string().min(1).max(120),
   description:   z.string().max(1000).default(''),
@@ -20,18 +23,20 @@ export const createProductSchema = z.object({
   price:         z.number().int().positive(),
   originalPrice: z.number().int().positive().optional(),
   unit:          z.string().min(1).max(30),
+  stockQuantity: z.number().int().min(0),
   sellerId:      z.string().min(1),
   sellerName:    z.string().min(1).max(120),
   location:      z.string().min(1).max(120),
-  inStock:       z.boolean(),
   isHandmade:    z.boolean(),
   shipsTo:       z.enum(['mandal', 'district', 'state', 'national']),
+  images:        z.array(z.string().url()).max(5).default([]),
+  status:        z.enum(productStatuses).default('active'),
   rating:        z.number().min(0).max(5),
   reviewCount:   z.number().int().min(0),
 });
 
-// Store-identity fields (sellerId, sellerName, location) are immutable after creation.
-// isVerified is also excluded — admin-only.
+// Store-identity fields are immutable after creation.
+// isVerified is admin-only. inStock is derived. Both excluded.
 export const updateProductSchema = createProductSchema
   .omit({ sellerId: true, sellerName: true, location: true })
   .partial();
