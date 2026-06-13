@@ -4,7 +4,12 @@ import type { CreateProductInput, UpdateProductInput } from './types.js';
 export class ProductService {
   constructor(private repo: ProductRepository) {}
 
-  listProducts(filters?: { category?: string; subCategory?: string; shipsTo?: string }) {
+  listProducts(filters?: {
+    category?: string;
+    subCategory?: string;
+    shipsTo?: string;
+    sellerId?: string;
+  }) {
     return this.repo.findAll(filters);
   }
 
@@ -13,7 +18,6 @@ export class ProductService {
   }
 
   createProduct(input: CreateProductInput) {
-    // Business rules go here — e.g. seller verification, price sanity checks
     return this.repo.create(input);
   }
 

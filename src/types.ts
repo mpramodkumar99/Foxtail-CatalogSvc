@@ -29,25 +29,32 @@ export type SubCategory =
   | 'mechanical'
   | 'rentals';
 
+export type ShipsTo = 'mandal' | 'district' | 'state' | 'national';
+
 export interface Product {
   id: string;
   name: string;
+  description: string;
   category: Category;
   subCategory: SubCategory;
-  price: number;         // integer paise — ₹40 = 4000
-  originalPrice?: number; // paise — for discounted items
-  unit: string;          // 'kg' | 'litre' | 'piece' | 'per visit' | 'per day' etc.
+  price: number;          // integer paise — ₹40 = 4000
+  originalPrice?: number; // paise
+  unit: string;           // 'kg' | 'litre' | 'piece' | 'per visit' | 'per day' etc.
   sellerId: string;
   sellerName: string;
-  location: string;      // e.g. "Nalgonda, Telangana"
+  location: string;       // e.g. "Nalgonda, Telangana"
   inStock: boolean;
-  isVerified: boolean;
+  isVerified: boolean;    // admin-controlled — never set by seller
   isHandmade: boolean;
-  shipsTo: 'mandal' | 'district' | 'state' | 'national';
+  shipsTo: ShipsTo;
   rating: number;
   reviewCount: number;
   createdAt: string;
+  updatedAt: string;
 }
 
-export type CreateProductInput = Omit<Product, 'id' | 'createdAt'>;
-export type UpdateProductInput = Partial<CreateProductInput>;
+// What a seller submits on POST — no id/timestamps/isVerified (server-managed)
+export type CreateProductInput = Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'isVerified'>;
+
+// What a seller may change on PATCH — store identity fields are immutable after creation
+export type UpdateProductInput = Partial<Omit<CreateProductInput, 'sellerId' | 'sellerName' | 'location'>>;
