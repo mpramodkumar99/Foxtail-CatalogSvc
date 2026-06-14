@@ -29,10 +29,11 @@ export const createProductSchema = z.object({
   location:      z.string().min(1).max(120),
   isHandmade:    z.boolean(),
   shipsTo:       z.enum(['mandal', 'district', 'state', 'national']),
-  images:        z.array(z.string().url()).max(5).default([]),
-  status:        z.enum(productStatuses).default('active'),
-  rating:        z.number().min(0).max(5),
-  reviewCount:   z.number().int().min(0),
+  images:             z.array(z.string()).max(5).default([]),
+  status:             z.enum(productStatuses).default('active'),
+  rating:             z.number().min(0).max(5),
+  reviewCount:        z.number().int().min(0),
+  lowStockThreshold:  z.number().int().min(0).optional(),
 });
 
 // Store-identity fields are immutable after creation.

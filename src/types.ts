@@ -53,10 +53,11 @@ export interface Product {
   isVerified: boolean;     // admin-controlled — never set by seller
   isHandmade: boolean;
   shipsTo: ShipsTo;
-  images: string[];        // ordered list of image URLs, max 5
+  images: string[];        // ordered list of image URLs/URIs, max 5
   status: ProductStatus;
   rating: number;
   reviewCount: number;
+  lowStockThreshold?: number; // seller-set alert level; defaults to 10 if absent
   createdAt: string;
   updatedAt: string;
 }
