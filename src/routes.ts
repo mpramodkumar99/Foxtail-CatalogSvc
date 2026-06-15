@@ -4,14 +4,16 @@ import { createProductSchema, updateProductSchema } from './schemas.js';
 
 export function registerProductRoutes(app: FastifyInstance, service: ProductService) {
 
-  // ── LIST ── GET /v1/products?category=farm_products&subCategory=grains_staples&shipsTo=state
+  // ── LIST ── GET /v1/products?category=&subCategory=&shipsTo=&sellerId=&status=
   app.get('/v1/products', async (request, reply) => {
-    const { category, subCategory, shipsTo } = request.query as {
+    const { category, subCategory, shipsTo, sellerId, status } = request.query as {
       category?: string;
       subCategory?: string;
       shipsTo?: string;
+      sellerId?: string;
+      status?: string;
     };
-    const products = await service.listProducts({ category, subCategory, shipsTo });
+    const products = await service.listProducts({ category, subCategory, shipsTo, sellerId, status });
     return reply.send({ success: true, data: products, meta: { total: products.length } });
   });
 
@@ -47,8 +49,33 @@ export function registerProductRoutes(app: FastifyInstance, service: ProductServ
   });
 
   // ── UPDATE ── PATCH /v1/products/:id
+  // Requires X-Seller-Id header matching the product's sellerId.
   app.patch('/v1/products/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
+
+    const requestedSellerId = (request.headers['x-seller-id'] as string | undefined)?.trim();
+    if (!requestedSellerId) {
+      return reply.status(401).send({
+        success: false,
+        error: { type: 'unauthorized', title: 'X-Seller-Id header is required', status: 401 },
+      });
+    }
+
+    const existing = await service.getProduct(id);
+    if (!existing) {
+      return reply.status(404).send({
+        success: false,
+        error: { type: 'not_found', title: 'Product not found', status: 404 },
+      });
+    }
+
+    if (existing.sellerId !== requestedSellerId) {
+      return reply.status(403).send({
+        success: false,
+        error: { type: 'forbidden', title: 'You do not own this product', status: 403 },
+      });
+    }
+
     const parsed = updateProductSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -61,26 +88,40 @@ export function registerProductRoutes(app: FastifyInstance, service: ProductServ
         },
       });
     }
+
     const updated = await service.updateProduct(id, parsed.data);
-    if (!updated) {
-      return reply.status(404).send({
-        success: false,
-        error: { type: 'not_found', title: 'Product not found', status: 404 },
-      });
-    }
     return reply.send({ success: true, data: updated });
   });
 
   // ── DELETE ── DELETE /v1/products/:id
+  // Requires X-Seller-Id header matching the product's sellerId.
   app.delete('/v1/products/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const removed = await service.deleteProduct(id);
-    if (!removed) {
+
+    const requestedSellerId = (request.headers['x-seller-id'] as string | undefined)?.trim();
+    if (!requestedSellerId) {
+      return reply.status(401).send({
+        success: false,
+        error: { type: 'unauthorized', title: 'X-Seller-Id header is required', status: 401 },
+      });
+    }
+
+    const existing = await service.getProduct(id);
+    if (!existing) {
       return reply.status(404).send({
         success: false,
         error: { type: 'not_found', title: 'Product not found', status: 404 },
       });
     }
+
+    if (existing.sellerId !== requestedSellerId) {
+      return reply.status(403).send({
+        success: false,
+        error: { type: 'forbidden', title: 'You do not own this product', status: 403 },
+      });
+    }
+
+    await service.deleteProduct(id);
     return reply.status(204).send();
   });
 }
