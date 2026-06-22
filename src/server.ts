@@ -1,28 +1,46 @@
+import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { InMemoryProductRepository } from './repository.js';
-import { ProductService } from './service.js';
-import { registerProductRoutes } from './routes.js';
+import {
+  InMemoryProductRepository,
+  InMemoryPromotionRepository,
+  InMemoryReviewRepository,
+} from './repository.js';
+import {
+  PgProductRepository,
+  PgPromotionRepository,
+  PgReviewRepository,
+} from './db/pg-repository.js';
+import { db } from './db/client.js';
+import { ProductService, PromotionService, ReviewService } from './service.js';
+import { registerProductRoutes, registerPromotionRoutes, registerReviewRoutes, registerCatalogItemRoutes } from './routes.js';
 
 async function start() {
   const app = Fastify({ logger: true });
 
-  // CORS — allows the buyer app (and browser) to call this API.
-  // In production, replace `origin: true` with your actual domain.
-  await app.register(cors, { origin: true });
+  await app.register(cors, {
+    origin: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id', 'X-Admin-Key'],
+    credentials: true,
+  });
 
-  // Dependency wiring: repository → service → routes
-  // To switch to PostgreSQL later, change ONLY the next line.
-  const repository = new InMemoryProductRepository();
-  const service = new ProductService(repository);
+  const usePostgres = Boolean(process.env['DATABASE_URL']);
 
-  registerProductRoutes(app, service);
+  const productRepo   = usePostgres ? new PgProductRepository(db)   : new InMemoryProductRepository();
+  const promotionRepo = usePostgres ? new PgPromotionRepository(db)  : new InMemoryPromotionRepository();
+  const reviewRepo    = usePostgres ? new PgReviewRepository(db)     : new InMemoryReviewRepository();
 
-  // Health check — used by load balancers and container orchestration (ECS/K8s)
+  registerProductRoutes(app,   new ProductService(productRepo));
+  registerPromotionRoutes(app, new PromotionService(promotionRepo));
+  registerReviewRoutes(app,    new ReviewService(reviewRepo));
+  registerCatalogItemRoutes(app);
+
   app.get('/health', async () => ({ status: 'ok', service: 'catalog-svc' }));
 
   const PORT = 3003;
   await app.listen({ port: PORT, host: '0.0.0.0' });
+  app.log.info(`catalog-svc storage: ${usePostgres ? 'PostgreSQL' : 'in-memory'}`);
   console.log(`catalog-svc running on http://localhost:${PORT}`);
 }
 

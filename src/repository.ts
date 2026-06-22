@@ -1,8 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import type { Product, CreateProductInput, UpdateProductInput } from './types.js';
+import type {
+  Product, CreateProductInput, UpdateProductInput,
+  Promotion, CreatePromotionInput, UpdatePromotionInput,
+  Review, CreateReviewInput, ReplyReviewInput,
+} from './types.js';
 
 export interface ProductRepository {
-  findAll(filters?: { category?: string; subCategory?: string; shipsTo?: string }): Promise<Product[]>;
+  findAll(filters?: { category?: string; subCategory?: string; shipsTo?: string; sellerId?: string; status?: string }): Promise<Product[]>;
   findById(id: string): Promise<Product | null>;
   create(input: CreateProductInput): Promise<Product>;
   update(id: string, input: UpdateProductInput): Promise<Product | null>;
@@ -14,11 +18,13 @@ export class InMemoryProductRepository implements ProductRepository {
 
   constructor() { this.seed(); }
 
-  async findAll(filters?: { category?: string; subCategory?: string; shipsTo?: string }): Promise<Product[]> {
+  async findAll(filters?: { category?: string; subCategory?: string; shipsTo?: string; sellerId?: string; status?: string }): Promise<Product[]> {
     let results = [...this.store.values()];
     if (filters?.category)    results = results.filter(p => p.category === filters.category);
     if (filters?.subCategory) results = results.filter(p => p.subCategory === filters.subCategory);
     if (filters?.shipsTo)     results = results.filter(p => p.shipsTo === filters.shipsTo);
+    if (filters?.sellerId)    results = results.filter(p => p.sellerId === filters.sellerId);
+    if (filters?.status)      results = results.filter(p => p.status === filters.status);
     return results;
   }
 
@@ -27,7 +33,17 @@ export class InMemoryProductRepository implements ProductRepository {
   }
 
   async create(input: CreateProductInput): Promise<Product> {
-    const product: Product = { ...input, id: randomUUID(), createdAt: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const product: Product = {
+      ...input,
+      id: randomUUID(),
+      inStock: input.stockQuantity > 0,
+      images: input.images ?? [],
+      status: input.status ?? 'active',
+      description: input.description ?? '',
+      createdAt: now,
+      updatedAt: now,
+    };
     this.store.set(product.id, product);
     return product;
   }
@@ -35,7 +51,12 @@ export class InMemoryProductRepository implements ProductRepository {
   async update(id: string, input: UpdateProductInput): Promise<Product | null> {
     const existing = this.store.get(id);
     if (!existing) return null;
-    const updated = { ...existing, ...input };
+    const updated: Product = {
+      ...existing,
+      ...input,
+      inStock: typeof input.stockQuantity === 'number' ? input.stockQuantity > 0 : existing.inStock,
+      updatedAt: new Date().toISOString(),
+    };
     this.store.set(id, updated);
     return updated;
   }
@@ -45,7 +66,12 @@ export class InMemoryProductRepository implements ProductRepository {
   }
 
   private seed() {
-    const items: CreateProductInput[] = [
+    type SeedItem = Pick<Product,
+      'name' | 'category' | 'subCategory' | 'price' | 'unit' |
+      'sellerId' | 'sellerName' | 'location' | 'inStock' |
+      'isVerified' | 'isHandmade' | 'shipsTo' | 'rating' | 'reviewCount'
+    > & Partial<Pick<Product, 'description' | 'originalPrice' | 'stockQuantity' | 'images' | 'status' | 'lowStockThreshold' | 'minimumOrderQty'>>;
+    const items: SeedItem[] = [
 
       // ── FARM PRODUCTS & COMMODITIES — Grains / Staples ──────────────────────
       {
@@ -389,9 +415,105 @@ export class InMemoryProductRepository implements ProductRepository {
       },
     ];
 
+    const now = new Date().toISOString();
     for (const item of items) {
-      const product: Product = { ...item, id: randomUUID(), createdAt: new Date().toISOString() };
+      const product: Product = {
+        description: '',
+        stockQuantity: item.inStock ? 50 : 0,
+        images: [],
+        status: 'active',
+        ...item,
+        id: randomUUID(),
+        inStock: item.inStock,
+        createdAt: now,
+        updatedAt: now,
+      };
       this.store.set(product.id, product);
     }
+  }
+}
+
+// ── PromotionRepository ───────────────────────────────────────────────────────
+
+export interface PromotionRepository {
+  findBySeller(sellerId: string): Promise<Promotion[]>;
+  create(input: CreatePromotionInput): Promise<Promotion>;
+  update(id: string, input: UpdatePromotionInput): Promise<Promotion | null>;
+  delete(id: string): Promise<boolean>;
+}
+
+export class InMemoryPromotionRepository implements PromotionRepository {
+  private store = new Map<string, Promotion>();
+
+  async findBySeller(sellerId: string): Promise<Promotion[]> {
+    return [...this.store.values()]
+      .filter(p => p.sellerId === sellerId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async create(input: CreatePromotionInput): Promise<Promotion> {
+    const now       = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + input.validDays * 86400000).toISOString();
+    const promo: Promotion = { ...input, id: randomUUID(), expiresAt, createdAt: now, updatedAt: now };
+    this.store.set(promo.id, promo);
+    return promo;
+  }
+
+  async update(id: string, input: UpdatePromotionInput): Promise<Promotion | null> {
+    const existing = this.store.get(id);
+    if (!existing) return null;
+    const updated = { ...existing, ...input, updatedAt: new Date().toISOString() };
+    this.store.set(id, updated);
+    return updated;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    return this.store.delete(id);
+  }
+}
+
+// ── ReviewRepository ──────────────────────────────────────────────────────────
+
+export interface ReviewRepository {
+  findBySeller(sellerId: string): Promise<Review[]>;
+  findByProduct(productId: string): Promise<Review[]>;
+  create(input: CreateReviewInput): Promise<Review>;
+  reply(id: string, input: ReplyReviewInput): Promise<Review | null>;
+  delete(id: string): Promise<boolean>;
+}
+
+export class InMemoryReviewRepository implements ReviewRepository {
+  private store = new Map<string, Review>();
+
+  async findBySeller(sellerId: string): Promise<Review[]> {
+    return [...this.store.values()]
+      .filter(r => r.sellerId === sellerId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async findByProduct(productId: string): Promise<Review[]> {
+    return [...this.store.values()]
+      .filter(r => r.productId === productId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async create(input: CreateReviewInput): Promise<Review> {
+    const now = new Date().toISOString();
+    const review: Review = { ...input, id: randomUUID(), createdAt: now, updatedAt: now };
+    this.store.set(review.id, review);
+    return review;
+  }
+
+  async reply(id: string, input: ReplyReviewInput): Promise<Review | null> {
+    const existing = this.store.get(id);
+    if (!existing) return null;
+    const now = new Date().toISOString();
+    const updated = { ...existing, reply: input.reply, repliedAt: now, updatedAt: now };
+    this.store.set(id, updated);
+    return updated;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    return this.store.delete(id);
   }
 }
